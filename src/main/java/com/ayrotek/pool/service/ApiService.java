@@ -1,69 +1,92 @@
-package com.ayrotek.pool.service;
+
+/*package com.ayrotek.pool.service;
 
 import org.springframework.beans.factory.annotation.Value;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import org.apache.commons.codec.binary.Hex;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.HttpMethod;
-
+import org.springframework.http.MediaType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashMap;
 
 @Service
 public class ApiService {
-	// Antpool API credentials (set via environment variables or properties)
-	@Value("${antpool.api.key}")
-	private String antpoolApiKey;
 
-	@Value("${antpool.api.secret}")
-	private String antpoolApiSecret;
+    @Value("${f2pool.api.token}")
+    private String apiToken; // F2Pool API token
 
-	@Value("${antpool.api.userid}")
-	private String antpoolUserId;
+    @Value("${f2pool.account.name}")
+    private String accountName; // F2Pool account name
 
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-	// Generate a random nonce (timestamp)
-	private String generateNonce() {
-		return String.valueOf(System.currentTimeMillis());
-	}
+    // Get account info
+    public String getAccountInfo() {
+        String url = "https://api.f2pool.com/v2/mining_user/get";
+        HashMap<String, Object> body = new HashMap<>();
+        body.put("mining_user_name", accountName);
+        return postJson(url, body);
+    }
 
+    // Get Litecoin balance
+    public String getLitecoinBalance() {
+        String url = "https://api.f2pool.com/v2/assets/balance";
+        HashMap<String, Object> body = new HashMap<>();
+        body.put("currency", "litecoin");
+        body.put("mining_user_name", accountName);
+        return postJson(url, body);
+    }
 
-	private String generateSignature(String userId, String key, String nonce, String secret) {
-	    try {
-	        String data = nonce + userId + key;
-	        Mac hmacSha256 = Mac.getInstance("HmacSHA256");
-	        SecretKeySpec secretKey = new SecretKeySpec(secret.getBytes(), "HmacSHA256");
-	        hmacSha256.init(secretKey);
-	        return Hex.encodeHexString(hmacSha256.doFinal(data.getBytes())).toUpperCase();
-	    } catch (Exception e) {
-	        throw new RuntimeException("Failed to generate signature", e);
-	    }
-	}
+    // Get Litecoin hashrate info
+    public String getLitecoinHashrateInfo() {
+        String url = "https://api.f2pool.com/v2/hash_rate/info";
+        HashMap<String, Object> body = new HashMap<>();
+        body.put("currency", "litecoin");
+        body.put("mining_user_name", accountName);
+        return postJson(url, body);
+    }
 
-	// Call Antpool poolStats API
-	public String getAntpoolPoolStats(String coin) {
-	String url = "https://antpool.com/api/poolStats.htm";
-	String key = antpoolApiKey;
-	String nonce = generateNonce();
-	String signature = generateSignature(antpoolUserId, key, nonce, antpoolApiSecret);
+    // Get Litecoin worker list
+    public String getLitecoinWorkerList() {
+        String url = "https://api.f2pool.com/v2/hash_rate/worker/list";
+        HashMap<String, Object> body = new HashMap<>();
+        body.put("currency", "litecoin");
+        body.put("mining_user_name", accountName);
+        return postJson(url, body);
+    }
 
-	org.springframework.util.LinkedMultiValueMap<String, String> params = new org.springframework.util.LinkedMultiValueMap<>();
-	params.add("userId", antpoolUserId);
-	params.add("key", key);
-	params.add("nonce", nonce);
-	params.add("signature", signature);
-	params.add("coin", coin);
+    // Get Litecoin blocks list (first page)
+    public String getLitecoinBlocksList() {
+        String url = "https://api.f2pool.com/v2/blocks/paging";
+        HashMap<String, Object> body = new HashMap<>();
+        body.put("currency", "litecoin");
+        body.put("page", 1);
+        body.put("pagesize", 20);
+        return postJson(url, body);
+    }
 
-	HttpHeaders headers = new HttpHeaders();
-	headers.set("Content-Type", "application/x-www-form-urlencoded");
-	HttpEntity<org.springframework.util.MultiValueMap<String, String>> entity = new HttpEntity<>(params, headers);
-	ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
-	return response.getBody();
-	}
-
-
-	private final RestTemplate restTemplate = new RestTemplate();
-}
+    // Helper for POST JSON with F2Pool API token
+    private String postJson(String url, HashMap<String, Object> body) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("F2P-API-SECRET", apiToken);
+            String json = objectMapper.writeValueAsString(body);
+            HttpEntity<String> entity = new HttpEntity<>(json, headers);
+            System.out.println("[DEBUG] F2Pool Request:");
+            System.out.println("  URL: " + url);
+            System.out.println("  Headers: " + headers);
+            System.out.println("  Body: " + json);
+            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+            System.out.println("[DEBUG] F2Pool Response:");
+            System.out.println("  Status: " + response.getStatusCode());
+            System.out.println("  Body: " + response.getBody());
+            return response.getBody();
+        } catch (Exception e) {
+            throw new RuntimeException("F2Pool API request failed", e);
+        }
+    }
+}*/
