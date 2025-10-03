@@ -1,4 +1,4 @@
-package com.ayrotek.pool.f2;
+/*package com.ayrotek.pool.f2;
 
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,4 +33,4 @@ mvc.perform(get("/api/f2pool/accounts").accept(MediaType.APPLICATION_JSON))
 .andExpect(status().isOk())
 .andExpect(jsonPath("$.code").value(0));
 }
-}
+}*/

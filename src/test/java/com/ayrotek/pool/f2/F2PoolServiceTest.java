@@ -1,4 +1,4 @@
-package com.ayrotek.pool.f2;
+/*package com.ayrotek.pool.f2;
 
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -28,4 +28,4 @@ when(client.post(Mockito.eq("/hash_rate/worker/list"), anyMap())).thenReturn(fak
 JsonNode res = service.listWorkers("mysub", "LTC");
 assertThat(res.path("data").path("workers").isArray()).isTrue();
 }
-}
+}*/

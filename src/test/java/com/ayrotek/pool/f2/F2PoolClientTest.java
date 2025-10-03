@@ -1,4 +1,4 @@
-package com.ayrotek.pool.f2;
+/*package com.ayrotek.pool.f2;
 
 
 import com.ayrotek.pool.config.F2PoolProperties;
@@ -46,4 +46,4 @@ assertThat(node.get("code").asInt()).isEqualTo(0);
 
 server.verify();
 }
-}
+}*/

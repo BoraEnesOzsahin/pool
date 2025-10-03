@@ -10,8 +10,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @RestController
 @RequestMapping("/api/f2pool")
 public class F2PoolController {
-private final F2PoolService service;
-public F2PoolController(F2PoolService service) { this.service = service; }
+	private final F2PoolService service;
+	private final F2PoolAgentService agentService;
+
+	// Only one constructor needed
+	public F2PoolController(F2PoolService service, F2PoolAgentService agentService) {
+		this.service = service;
+		this.agentService = agentService;
+	}
+	@GetMapping("/agent/status")
+	public ResponseEntity<?> getAgentStatus() {
+		return ResponseEntity.ok(agentService.getLatestStatus());
+	}
 
 
 @GetMapping("/accounts")

@@ -1,6 +1,8 @@
+
 package com.ayrotek.pool.f2;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.ayrotek.pool.config.F2PoolProperties;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -8,9 +10,15 @@ import java.util.HashMap;
 @Service
 public class F2PoolService {
     private final F2PoolClient client;
+    private final F2PoolProperties f2PoolProperties;
 
-    public F2PoolService(F2PoolClient client) {
+    public F2PoolService(F2PoolClient client, F2PoolProperties f2PoolProperties) {
         this.client = client;
+        this.f2PoolProperties = f2PoolProperties;
+    }
+    // Returns the default mining user from configuration
+    public String getDefaultMiningUser() {
+        return f2PoolProperties.getAccountName();
     }
 
     public JsonNode listMiningUsers() {
