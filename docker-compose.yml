@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  stratum-proxy:
+    build: .
+    image: ayrotek/stratum-proxy:latest
+    container_name: stratum-proxy
+    ports:
+      - "3333:3333"  # Stratum port for miners
+      - "8081:8081"  # HTTP API
+    environment:
+      - STRATUM_SERVER_HOST=0.0.0.0
+      - STRATUM_SERVER_PORT=3333
+      - STRATUM_UPSTREAM_HOST=xmr.antpool.com
+      - STRATUM_UPSTREAM_PORT=9005
+      - LOGGING_LEVEL_ROOT=INFO
+    restart: unless-stopped
+    networks:
+      - mining-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  mining-network:
+    driver: bridge

@@ -1,0 +1,6 @@
+ALGO = randomx
+POOL = 192.168.56.1:3333
+WALLET = yourAntpoolSubaccount.w-ubuntu-miner
+PASSWORD = x
+CPU_THREADS = 4
+DISABLE_GPU = true
