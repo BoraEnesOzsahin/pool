@@ -17,6 +17,9 @@ import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.utils.Convert;
 import org.web3j.utils.Numeric;
 
+import com.ayrotek.pool_ser.entity.SweepRecord;
+import com.ayrotek.pool_ser.entity.SweepStatus;
+import com.ayrotek.pool_ser.repository.SweepRecordRepository;
 import com.ayrotek.pool_ser.service.SweepPlanner.Plan;
 
 @Service
@@ -26,10 +29,12 @@ public class SweeperService {
 
     private final Web3j web3j;
     private final Credentials credentials;
+    private final SweepRecordRepository sweepRecordRepository;
 
-    public SweeperService(Web3j web3j, Credentials credentials) {
+    public SweeperService(Web3j web3j, Credentials credentials, SweepRecordRepository sweepRecordRepository) {
         this.web3j = web3j;
         this.credentials = credentials;
+        this.sweepRecordRepository = sweepRecordRepository;
     }
 
     public Optional<String> sweepOnce(Plan plan) {
@@ -43,7 +48,10 @@ public class SweeperService {
             return Optional.empty();
         }
 
+        SweepRecord sweepRecord = null;
         try {
+            sweepRecord = sweepRecordRepository.save(asPlannedRecord(plan));
+
             RawTransaction rawTransaction = RawTransaction.createEtherTransaction(
                     plan.nonce(),
                     plan.gasLimit(),
@@ -57,17 +65,30 @@ public class SweeperService {
 
             EthSendTransaction response = web3j.ethSendRawTransaction(hexPayload).send();
             if (response == null) {
-                log.error("eth_sendRawTransaction returned null response.");
+                log.error("eth_sendRawTransaction returned null response for sweep {}.", sweepRecord.getId());
+                markFailed(sweepRecord);
                 return Optional.empty();
             }
 
             if (response.hasError()) {
-                log.error("Sweep transaction rejected (code {}): {}", response.getError().getCode(), response.getError().getMessage());
+                log.error("Sweep {} rejected (code {}): {}",
+                        sweepRecord.getId(),
+                        response.getError().getCode(),
+                        response.getError().getMessage());
+                markFailed(sweepRecord);
                 return Optional.empty();
             }
 
             String txHash = response.getTransactionHash();
+            if (txHash == null) {
+                log.error("Sweep {} succeeded without tx hash; marking as failed.", sweepRecord.getId());
+                markFailed(sweepRecord);
+                return Optional.empty();
+            }
+
+            markSent(sweepRecord, txHash);
             log.info("Sweep sent from {} to {} amount {} Wei ({} ETH) gasLimit {} maxFee {} gwei priorityFee {} gwei txHash {}",
+                    sweepRecord.getId(),
                     plan.from(),
                     plan.to(),
                     plan.sweepAmountWei(),
@@ -76,9 +97,12 @@ public class SweeperService {
                     toGwei(plan.maxFeeWei()),
                     toGwei(plan.priorityFeeWei()),
                     txHash);
-            return Optional.ofNullable(txHash);
+            return Optional.of(txHash);
         } catch (IOException ex) {
-            log.error("RPC error while sending sweep transaction: {}", ex.getMessage());
+            log.error("RPC error while sending sweep transaction for sweep {}: {}",
+                    sweepRecord != null ? sweepRecord.getId() : "n/a",
+                    ex.getMessage());
+            markFailed(sweepRecord);
             log.debug("Sweep transaction failure", ex);
             return Optional.empty();
         }
@@ -94,5 +118,35 @@ public class SweeperService {
 
     private BigDecimal scale(BigDecimal value) {
         return value.setScale(9, RoundingMode.DOWN).stripTrailingZeros();
+    }
+
+    private SweepRecord asPlannedRecord(Plan plan) {
+        SweepRecord record = new SweepRecord();
+        record.setFromAddress(plan.from());
+        record.setToAddress(plan.to());
+        record.setAmountWei(plan.sweepAmountWei());
+        record.setGasLimit(plan.gasLimit());
+        record.setEffectiveFeePerGasWei(plan.effectiveFeePerGasWei());
+        record.setGasCostWei(plan.gasCostWei());
+        record.setNonce(plan.nonce());
+        record.setChainId(plan.chainId());
+        record.setTxHash(null);
+        record.setStatus(SweepStatus.PLANNED);
+        return record;
+    }
+
+    private void markFailed(SweepRecord record) {
+        if (record == null) {
+            return;
+        }
+        record.setStatus(SweepStatus.FAILED);
+        record.setTxHash(null);
+        sweepRecordRepository.save(record);
+    }
+
+    private void markSent(SweepRecord record, String txHash) {
+        record.setTxHash(txHash);
+        record.setStatus(SweepStatus.SENT);
+        sweepRecordRepository.save(record);
     }
 }
