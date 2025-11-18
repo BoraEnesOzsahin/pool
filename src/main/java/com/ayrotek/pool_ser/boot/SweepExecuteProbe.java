@@ -2,6 +2,7 @@ package com.ayrotek.pool_ser.boot;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,7 +10,6 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.web3j.crypto.Credentials;
@@ -17,50 +17,69 @@ import org.web3j.utils.Convert;
 
 import com.ayrotek.pool_ser.service.SweepPlanner;
 import com.ayrotek.pool_ser.service.SweepPlanner.Plan;
+import com.ayrotek.pool_ser.service.SweeperService;
 
 @Component
-@Order(Ordered.LOWEST_PRECEDENCE)
-public class SweepPlanProbe implements ApplicationRunner {
+@Order(Ordered.HIGHEST_PRECEDENCE)
+public class SweepExecuteProbe implements ApplicationRunner {
 
-    private static final Logger log = LoggerFactory.getLogger(SweepPlanProbe.class);
+    private static final Logger log = LoggerFactory.getLogger(SweepExecuteProbe.class);
 
     private final Credentials credentials;
     private final SweepPlanner sweepPlanner;
-    private final Environment environment;
+    private final SweeperService sweeperService;
 
-    public SweepPlanProbe(
+    public SweepExecuteProbe(
             Credentials credentials,
             SweepPlanner sweepPlanner,
-            Environment environment) {
+            SweeperService sweeperService) {
         this.credentials = credentials;
         this.sweepPlanner = sweepPlanner;
-        this.environment = environment;
+        this.sweeperService = sweeperService;
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        if (!shouldExecute(environment.getProperty("SWEEPER_PLAN_PROBE_ENABLED"))) {
-            log.debug("Sweep plan probe disabled; set SWEEPER_PLAN_PROBE_ENABLED=true to enable detailed startup planning log.");
+        if (!shouldExecute(System.getenv("SWEEPER_EXECUTE_ON_STARTUP"))) {
+            log.info("Sweeper configured but SWEEPER_EXECUTE_ON_STARTUP is not true; no startup transaction sent.");
             return;
         }
 
-        final String hotAddress = credentials.getAddress();
-        final String coldAddress = resolveColdAddress();
-
+        final Plan plan;
         try {
-            Plan plan = sweepPlanner.plan(hotAddress, coldAddress);
-            log.info(buildSummary(plan));
+            String from = credentials.getAddress();
+            String to = resolveColdAddress(System.getenv("SWEEPER_COLD_ADDRESS"));
+            plan = sweepPlanner.plan(from, to);
         } catch (Exception ex) {
-            log.error("Failed to plan sweep: {}", ex.getMessage(), ex);
+            log.error("Failed to plan sweep: {}", ex.getMessage());
+            log.debug("Sweep planning failure", ex);
+            return;
+        }
+
+        log.info(buildSummary(plan));
+
+        if (!plan.sweepable()) {
+            log.warn("Not sweepable, nothing sent.");
+            return;
+        }
+
+        Optional<String> txHash = sweeperService.sweepOnce(plan);
+        if (txHash.isPresent()) {
+            log.info("Sweep transaction hash: {}", txHash.get());
+        } else {
+            log.error("Sweep transaction failed; see previous errors.");
         }
     }
 
-    private String resolveColdAddress() {
-        String cold = environment.getProperty("SWEEPER_COLD_ADDRESS");
-        if (!StringUtils.hasText(cold)) {
+    private boolean shouldExecute(String rawFlag) {
+        return StringUtils.hasText(rawFlag) && "true".equalsIgnoreCase(rawFlag.trim());
+    }
+
+    private String resolveColdAddress(String coldEnv) {
+        if (!StringUtils.hasText(coldEnv)) {
             throw new IllegalStateException("SWEEPER_COLD_ADDRESS environment variable is required");
         }
-        return cold.trim();
+        return coldEnv.trim();
     }
 
     private String buildSummary(Plan plan) {
@@ -86,12 +105,8 @@ public class SweepPlanProbe implements ApplicationRunner {
                 .toString();
     }
 
-    private BigDecimal toEth(BigDecimal wei) {
-        return scale(Convert.fromWei(wei, Convert.Unit.ETHER));
-    }
-
     private BigDecimal toEth(java.math.BigInteger wei) {
-        return toEth(new BigDecimal(wei));
+        return scale(Convert.fromWei(new BigDecimal(wei), Convert.Unit.ETHER));
     }
 
     private BigDecimal toGwei(java.math.BigInteger wei) {
@@ -100,9 +115,5 @@ public class SweepPlanProbe implements ApplicationRunner {
 
     private BigDecimal scale(BigDecimal value) {
         return value.setScale(9, RoundingMode.DOWN).stripTrailingZeros();
-    }
-
-    private boolean shouldExecute(String rawFlag) {
-        return StringUtils.hasText(rawFlag) && "true".equalsIgnoreCase(rawFlag.trim());
     }
 }

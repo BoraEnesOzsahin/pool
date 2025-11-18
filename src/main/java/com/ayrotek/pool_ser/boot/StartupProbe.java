@@ -29,21 +29,18 @@ public class StartupProbe implements ApplicationRunner {
                         ? response.getError().getMessage()
                         : "No response from Alchemy RPC";
                 log.error("Alchemy RPC connection failed: {}", message);
-                System.exit(1);
                 return;
             }
 
             String clientVersion = response.getWeb3ClientVersion();
             if (!StringUtils.hasText(clientVersion)) {
                 log.error("Alchemy RPC connection returned empty client version");
-                System.exit(1);
                 return;
             }
 
             log.info("Alchemy client version: {}", clientVersion);
         } catch (Exception ex) {
             log.error("Alchemy RPC connection failed: {}", ex.getMessage());
-            System.exit(1);
         }
     }
 }
