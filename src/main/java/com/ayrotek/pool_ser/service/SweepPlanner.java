@@ -13,14 +13,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.Web3jService;
-import org.web3j.protocol.core.JsonRpc2_0Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
+import org.web3j.protocol.core.JsonRpc2_0Web3j;
 import org.web3j.protocol.core.Response;
 import org.web3j.protocol.core.Request;
 import org.web3j.protocol.core.methods.response.EthChainId;
 import org.web3j.protocol.core.methods.response.EthGasPrice;
 import org.web3j.protocol.core.methods.response.EthGetBalance;
-import org.web3j.protocol.core.methods.response.EthGetTransactionCount;
 import org.web3j.utils.Numeric;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -37,10 +36,12 @@ public class SweepPlanner {
 
     private final Web3j web3j;
     private final Web3jService web3jService;
+    private final NonceService nonceService;
 
-    public SweepPlanner(Web3j web3j) {
+    public SweepPlanner(Web3j web3j, NonceService nonceService) {
         this.web3j = web3j;
         this.web3jService = extractService(web3j);
+        this.nonceService = nonceService;
     }
 
     public Plan plan(String fromAddress, String toAddress) {
@@ -56,7 +57,7 @@ public class SweepPlanner {
 
         try {
             BigInteger chainId = fetchChainId();
-            BigInteger nonce = fetchNonce(from);
+            BigInteger nonce = nonceService.nextNonce(from);
             BigInteger balance = fetchBalance(from);
             BigInteger priorityFee = fetchPriorityFee();
             Optional<BigInteger> baseFeeHint = fetchBaseFeeHint();
@@ -97,16 +98,6 @@ public class SweepPlanner {
             throw new IllegalStateException("eth_chainId returned null chain id");
         }
         return chainId;
-    }
-
-    private BigInteger fetchNonce(String fromAddress) throws IOException {
-        EthGetTransactionCount response = web3j.ethGetTransactionCount(fromAddress, DefaultBlockParameterName.PENDING).send();
-        EthGetTransactionCount verified = requireResponse("eth_getTransactionCount", response);
-        BigInteger nonce = verified.getTransactionCount();
-        if (nonce == null) {
-            throw new IllegalStateException("eth_getTransactionCount returned null nonce");
-        }
-        return nonce;
     }
 
     private BigInteger fetchBalance(String fromAddress) throws IOException {
