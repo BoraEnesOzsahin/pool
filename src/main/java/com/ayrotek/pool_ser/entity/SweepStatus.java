@@ -3,5 +3,8 @@ package com.ayrotek.pool_ser.entity;
 public enum SweepStatus {
     PLANNED,
     SENT,
-    FAILED
+    CONFIRMED,
+    REVERTED,
+    FAILED,
+    RETRY_PLANNED
 }

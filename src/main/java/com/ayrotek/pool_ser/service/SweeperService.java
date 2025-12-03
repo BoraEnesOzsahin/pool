@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.web3j.crypto.Credentials;
 import org.web3j.crypto.RawTransaction;
@@ -30,11 +31,16 @@ public class SweeperService {
     private final Web3j web3j;
     private final Credentials credentials;
     private final SweepRecordRepository sweepRecordRepository;
+    private final int receiptMaxRetries;
 
-    public SweeperService(Web3j web3j, Credentials credentials, SweepRecordRepository sweepRecordRepository) {
+    public SweeperService(Web3j web3j,
+            Credentials credentials,
+            SweepRecordRepository sweepRecordRepository,
+            @Value("${SWEEPER_RECEIPT_MAX_RETRIES:3}") int receiptMaxRetries) {
         this.web3j = web3j;
         this.credentials = credentials;
         this.sweepRecordRepository = sweepRecordRepository;
+        this.receiptMaxRetries = receiptMaxRetries;
     }
 
     public Optional<String> sweepOnce(Plan plan) {
@@ -66,7 +72,7 @@ public class SweeperService {
             EthSendTransaction response = web3j.ethSendRawTransaction(hexPayload).send();
             if (response == null) {
                 log.error("eth_sendRawTransaction returned null response for sweep {}.", sweepRecord.getId());
-                markFailed(sweepRecord);
+                markFailed(sweepRecord, "Null response from eth_sendRawTransaction");
                 return Optional.empty();
             }
 
@@ -75,14 +81,14 @@ public class SweeperService {
                         sweepRecord.getId(),
                         response.getError().getCode(),
                         response.getError().getMessage());
-                markFailed(sweepRecord);
+                markFailed(sweepRecord, response.getError().getMessage());
                 return Optional.empty();
             }
 
             String txHash = response.getTransactionHash();
             if (txHash == null) {
                 log.error("Sweep {} succeeded without tx hash; marking as failed.", sweepRecord.getId());
-                markFailed(sweepRecord);
+                markFailed(sweepRecord, "Missing transaction hash after eth_sendRawTransaction");
                 return Optional.empty();
             }
 
@@ -102,7 +108,7 @@ public class SweeperService {
             log.error("RPC error while sending sweep transaction for sweep {}: {}",
                     sweepRecord != null ? sweepRecord.getId() : "n/a",
                     ex.getMessage());
-            markFailed(sweepRecord);
+            markFailed(sweepRecord, ex.getMessage());
             log.debug("Sweep transaction failure", ex);
             return Optional.empty();
         }
@@ -132,14 +138,29 @@ public class SweeperService {
         record.setChainId(plan.chainId());
         record.setTxHash(null);
         record.setStatus(SweepStatus.PLANNED);
+        record.setRetryCount(0);
+        record.setLastError(null);
+        record.setLastCheckedAt(null);
         return record;
     }
 
-    private void markFailed(SweepRecord record) {
+    private void markFailed(SweepRecord record, String errorMessage) {
         if (record == null) {
             return;
         }
-        record.setStatus(SweepStatus.FAILED);
+        String safeMessage = errorMessage == null ? "Unknown send failure" : errorMessage;
+        if (isRetryableError(safeMessage)) {
+            int currentRetries = record.getRetryCount() + 1;
+            record.setRetryCount(currentRetries);
+            if (currentRetries >= receiptMaxRetries) {
+                record.setStatus(SweepStatus.FAILED);
+            } else {
+                record.setStatus(SweepStatus.RETRY_PLANNED);
+            }
+        } else {
+            record.setStatus(SweepStatus.FAILED);
+        }
+        record.setLastError(truncate(safeMessage));
         record.setTxHash(null);
         sweepRecordRepository.save(record);
     }
@@ -147,6 +168,24 @@ public class SweeperService {
     private void markSent(SweepRecord record, String txHash) {
         record.setTxHash(txHash);
         record.setStatus(SweepStatus.SENT);
+        record.setLastError(null);
         sweepRecordRepository.save(record);
+    }
+
+    private boolean isRetryableError(String message) {
+        if (message == null) {
+            return false;
+        }
+        String normalized = message.toLowerCase();
+        return normalized.contains("underpriced") ||
+                normalized.contains("replacement transaction underpriced") ||
+                normalized.contains("nonce too low");
+    }
+
+    private String truncate(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= 512 ? value : value.substring(0, 512);
     }
 }

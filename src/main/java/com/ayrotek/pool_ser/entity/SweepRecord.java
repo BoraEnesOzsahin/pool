@@ -53,6 +53,15 @@ public class SweepRecord {
     @Column(name = "status", nullable = false, length = 16)
     private SweepStatus status;
 
+    @Column(name = "retry_count", nullable = false)
+    private int retryCount = 0;
+
+    @Column(name = "last_error", length = 512)
+    private String lastError;
+
+    @Column(name = "last_checked_at")
+    private Instant lastCheckedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -165,5 +174,29 @@ public class SweepRecord {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(int retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public String getLastError() {
+        return lastError;
+    }
+
+    public void setLastError(String lastError) {
+        this.lastError = lastError;
+    }
+
+    public Instant getLastCheckedAt() {
+        return lastCheckedAt;
+    }
+
+    public void setLastCheckedAt(Instant lastCheckedAt) {
+        this.lastCheckedAt = lastCheckedAt;
     }
 }
