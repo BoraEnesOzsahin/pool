@@ -9,14 +9,14 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 @Component
-public class DogecoinGenericSweepStartupRunner implements ApplicationRunner {
+public class DogecoinSweepStartupRunner implements ApplicationRunner {
 
-    private static final Logger log = LoggerFactory.getLogger(DogecoinGenericSweepStartupRunner.class);
+    private static final Logger log = LoggerFactory.getLogger(DogecoinSweepStartupRunner.class);
 
     private final DogecoinSweeperService sweeperService;
     private final Environment environment;
 
-    public DogecoinGenericSweepStartupRunner(
+    public DogecoinSweepStartupRunner(
             DogecoinSweeperService sweeperService,
             Environment environment
     ) {
@@ -26,10 +26,16 @@ public class DogecoinGenericSweepStartupRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        boolean enabled = environment.getProperty("DOGE_GENERIC_SWEEP_ON_STARTUP", Boolean.class, false);
+        // Preferred env var going forward.
+        Boolean enabled = environment.getProperty("DOGE_SWEEP_ON_STARTUP", Boolean.class);
+        if (enabled == null) {
+            // Backwards-compatibility with older naming.
+            enabled = environment.getProperty("DOGE_GENERIC_SWEEP_ON_STARTUP", Boolean.class, false);
+        }
+
         if (!enabled) {
-            log.info("Dogecoin generic sweep on startup disabled (DOGE_GENERIC_SWEEP_ON_STARTUP != true)."
-                    + " Set DOGE_GENERIC_SWEEP_ON_STARTUP=true to enable.");
+            log.info("Dogecoin sweep on startup disabled (DOGE_SWEEP_ON_STARTUP != true)."
+                    + " Set DOGE_SWEEP_ON_STARTUP=true to enable.");
             return;
         }
 

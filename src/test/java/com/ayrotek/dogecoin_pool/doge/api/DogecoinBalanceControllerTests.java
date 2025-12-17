@@ -8,7 +8,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 
 @SpringBootTest(
         properties = {
-                "DOGE_GENERIC_SWEEP_ON_STARTUP=false"
+        "DOGE_SWEEP_ON_STARTUP=false"
         }
 )
 class DogecoinBalanceControllerTests {
