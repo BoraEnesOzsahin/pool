@@ -1,6 +1,7 @@
 package com.ayrotek.dogecoin_pool.doge.service;
 
 import com.ayrotek.dogecoin_pool.doge.client.ElectrsDogecoinClient;
+import com.ayrotek.dogecoin_pool.doge.db.DogeSweepTransactionRepository;
 import com.ayrotek.dogecoin_pool.doge.config.TatumDogecoinProperties;
 import com.ayrotek.dogecoin_pool.doge.dto.DogeBalanceDto;
 import com.ayrotek.dogecoin_pool.doge.dto.DogeFromAddress;
@@ -32,16 +33,19 @@ public class DogecoinSweeperService {
     private final ElectrsDogecoinClient electrsClient;
     private final TatumDogecoinProperties props;
     private final WebClient webClient;
+    private final DogeSweepTransactionRepository sweepTxRepo;
 
     private final AtomicBoolean sweepInProgress = new AtomicBoolean(false);
 
     public DogecoinSweeperService(
             ElectrsDogecoinClient electrsClient,
             TatumDogecoinProperties props,
+            DogeSweepTransactionRepository sweepTxRepo,
             WebClient.Builder webClientBuilder
     ) {
         this.electrsClient = electrsClient;
         this.props = props;
+        this.sweepTxRepo = sweepTxRepo;
         this.webClient = webClientBuilder
                 .baseUrl(props.getBaseUrl())
                 .defaultHeader("X-API-Key", Objects.requireNonNullElse(props.getApiKey(), ""))
@@ -51,7 +55,7 @@ public class DogecoinSweeperService {
 
     public DogeSweepResult sweepOnce() {
         if (!sweepInProgress.compareAndSet(false, true)) {
-            return new DogeSweepResult(null, null, null, false, "Sweep already in progress");
+            return persistAndReturn(null, null, new DogeSweepResult(null, null, null, false, "Sweep already in progress"));
         }
 
         try {
@@ -71,22 +75,22 @@ public class DogecoinSweeperService {
         }
 
         if (hot == null || hot.isBlank()) {
-            return new DogeSweepResult(null, null, null, false, "HOT address is not configured");
+            return persistAndReturn(hot, cold, new DogeSweepResult(null, null, null, false, "HOT address is not configured"));
         }
         if (cold == null || cold.isBlank()) {
-            return new DogeSweepResult(null, null, null, false, "COLD address is not configured");
+            return persistAndReturn(hot, cold, new DogeSweepResult(null, null, null, false, "COLD address is not configured"));
         }
         if (hotPrivateKey == null || hotPrivateKey.isBlank()) {
-            return new DogeSweepResult(null, null, null, false, "HOT private key is not configured");
+            return persistAndReturn(hot, cold, new DogeSweepResult(null, null, null, false, "HOT private key is not configured"));
         }
 
         String hotValidationError = DogecoinAddressValidator.validate(hot);
         if (hotValidationError != null) {
-            return new DogeSweepResult(null, null, null, false, "Invalid HOT address: " + hotValidationError);
+            return persistAndReturn(hot, cold, new DogeSweepResult(null, null, null, false, "Invalid HOT address: " + hotValidationError));
         }
         String coldValidationError = DogecoinAddressValidator.validate(cold);
         if (coldValidationError != null) {
-            return new DogeSweepResult(null, null, null, false, "Invalid COLD address: " + coldValidationError);
+            return persistAndReturn(hot, cold, new DogeSweepResult(null, null, null, false, "Invalid COLD address: " + coldValidationError));
         }
 
         BigDecimal minSweep = BigDecimal.valueOf(props.getMinSweepDoge());
@@ -107,34 +111,34 @@ public class DogecoinSweeperService {
             if (body != null && !body.isBlank()) {
                 msg = msg + " body=" + shorten(body, 300);
             }
-            return new DogeSweepResult(null, null, null, false, msg);
+            return persistAndReturn(hot, cold, new DogeSweepResult(null, null, null, false, msg));
         } catch (RuntimeException ex) {
-            return new DogeSweepResult(null, null, null, false, "Failed to fetch balance: " + ex.getMessage());
+            return persistAndReturn(hot, cold, new DogeSweepResult(null, null, null, false, "Failed to fetch balance: " + ex.getMessage()));
         }
 
         if (balanceDto == null) {
-            return new DogeSweepResult(null, null, null, false, "Electrs returned null balance payload");
+            return persistAndReturn(hot, cold, new DogeSweepResult(null, null, null, false, "Electrs returned null balance payload"));
         }
         BigDecimal balance = parseBalance(balanceDto);
 
         log.info("[DOGE] HOT balance={} DOGE (minSweep={}, reserve={})", balance, minSweep, reserve);
 
         if (balance.compareTo(minSweep) <= 0) {
-            return new DogeSweepResult(balance, BigDecimal.ZERO, null, false,
-                    "Balance <= min sweep; nothing to do");
+            return persistAndReturn(hot, cold, new DogeSweepResult(balance, BigDecimal.ZERO, null, false,
+                "Balance <= min sweep; nothing to do"));
         }
 
         BigDecimal sweepable = balance.subtract(reserve).setScale(8, RoundingMode.DOWN);
         if (sweepable.compareTo(BigDecimal.ZERO) <= 0) {
-            return new DogeSweepResult(balance, BigDecimal.ZERO, null, false,
-                    "Sweepable amount <= 0 after reserve");
+            return persistAndReturn(hot, cold, new DogeSweepResult(balance, BigDecimal.ZERO, null, false,
+                "Sweepable amount <= 0 after reserve"));
         }
 
         BigDecimal fee = FIXED_FEE_DOGE;
         BigDecimal sendAmount = sweepable.subtract(fee).setScale(8, RoundingMode.DOWN);
         if (sendAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            return new DogeSweepResult(balance, BigDecimal.ZERO, null, false,
-                    "Sweepable amount minus fee <= 0");
+            return persistAndReturn(hot, cold, new DogeSweepResult(balance, BigDecimal.ZERO, null, false,
+                "Sweepable amount minus fee <= 0"));
         }
 
         DogeTransactionAddressRequest body = new DogeTransactionAddressRequest(
@@ -145,8 +149,8 @@ public class DogecoinSweeperService {
         );
 
         if (props.getApiKey() == null || props.getApiKey().isBlank()) {
-            return new DogeSweepResult(balance, sendAmount, null, false,
-                "Tatum apiKey is not configured; cannot broadcast sweep transaction");
+            return persistAndReturn(hot, cold, new DogeSweepResult(balance, sendAmount, null, false,
+                "Tatum apiKey is not configured; cannot broadcast sweep transaction"));
         }
 
         try {
@@ -158,12 +162,12 @@ public class DogecoinSweeperService {
                     .block();
 
             if (resp == null || resp.txId() == null || resp.txId().isBlank()) {
-                return new DogeSweepResult(balance, sendAmount, null, false,
-                        "Tatum returned null/empty txId");
+                return persistAndReturn(hot, cold, new DogeSweepResult(balance, sendAmount, null, false,
+                    "Tatum returned null/empty txId"));
             }
 
             log.info("[DOGE] Sweep broadcasted. txId={}", resp.txId());
-            return new DogeSweepResult(balance, sendAmount, resp.txId(), true, "submitted");
+            return persistAndReturn(hot, cold, new DogeSweepResult(balance, sendAmount, resp.txId(), true, "submitted"));
 
         } catch (WebClientResponseException wcre) {
             String responseBody = wcre.getResponseBodyAsString();
@@ -172,15 +176,56 @@ public class DogecoinSweeperService {
             if (responseBody != null && !responseBody.isBlank()) {
                 msg = msg + " body=" + shorten(responseBody, 500);
             }
-            return new DogeSweepResult(balance, sendAmount, null, false, msg);
+            return persistAndReturn(hot, cold, new DogeSweepResult(balance, sendAmount, null, false, msg));
         } catch (Exception ex) {
             log.error("[DOGE] Sweep failed", ex);
-            return new DogeSweepResult(balance, sendAmount, null, false, "Unexpected error");
+            return persistAndReturn(hot, cold, new DogeSweepResult(balance, sendAmount, null, false, "Unexpected error"));
         }
 
         } finally {
             sweepInProgress.set(false);
         }
+    }
+
+    private DogeSweepResult persistAndReturn(String hotAddress, String coldAddress, DogeSweepResult result) {
+        try {
+            BigDecimal updatedHotBalance = computeUpdatedHotBalance(result);
+            sweepTxRepo.insert(
+                    hotAddress,
+                    coldAddress,
+                    result.txId(),
+                    result.submitted(),
+                    result.hotBalance(),
+                    result.amountSent(),
+                    updatedHotBalance,
+                    result.message()
+            );
+        } catch (Exception ex) {
+            log.warn("[DOGE] Failed to persist sweep transaction", ex);
+        }
+        return result;
+    }
+
+    private BigDecimal computeUpdatedHotBalance(DogeSweepResult result) {
+        if (result == null) {
+            return null;
+        }
+        if (!result.submitted()) {
+            return null;
+        }
+        if (result.hotBalance() == null || result.amountSent() == null) {
+            return null;
+        }
+
+        BigDecimal updated = result.hotBalance()
+                .subtract(result.amountSent())
+                .subtract(FIXED_FEE_DOGE)
+                .setScale(8, RoundingMode.DOWN);
+
+        if (updated.compareTo(BigDecimal.ZERO) < 0) {
+            updated = BigDecimal.ZERO.setScale(8, RoundingMode.DOWN);
+        }
+        return updated;
     }
 
     private String shorten(String value, int maxLen) {
