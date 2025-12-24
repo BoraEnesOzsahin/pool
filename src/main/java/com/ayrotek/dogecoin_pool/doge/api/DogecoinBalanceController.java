@@ -1,6 +1,6 @@
 package com.ayrotek.dogecoin_pool.doge.api;
 
-import com.ayrotek.dogecoin_pool.doge.client.TatumDogecoinClient;
+import com.ayrotek.dogecoin_pool.doge.client.ElectrsDogecoinClient;
 import com.ayrotek.dogecoin_pool.doge.config.TatumDogecoinProperties;
 import com.ayrotek.dogecoin_pool.doge.dto.DogeBalanceDto;
 import com.ayrotek.dogecoin_pool.doge.util.DogecoinAddressValidator;
@@ -22,11 +22,11 @@ import java.util.Set;
 @RestController
 public class DogecoinBalanceController {
 
-    private final TatumDogecoinClient tatumClient;
+    private final ElectrsDogecoinClient electrsClient;
     private final TatumDogecoinProperties props;
 
-    public DogecoinBalanceController(TatumDogecoinClient tatumClient, TatumDogecoinProperties props) {
-        this.tatumClient = tatumClient;
+    public DogecoinBalanceController(ElectrsDogecoinClient electrsClient, TatumDogecoinProperties props) {
+        this.electrsClient = electrsClient;
         this.props = props;
     }
 
@@ -45,7 +45,7 @@ public class DogecoinBalanceController {
 
         if (addresses.isEmpty()) {
             return Mono.just(List.of(new AddressBalanceResult(null, null, null,
-                    "No addresses provided. Pass ?address=... or configure TATUM_DOGE_HOT_ADDRESS/TATUM_DOGE_COLD_ADDRESS.")));
+                    "No addresses provided. Pass ?address=... or configure tatum.doge.hot-address / tatum.doge.cold-address.")));
         }
 
         if (addresses.size() > 100) {
@@ -59,7 +59,7 @@ public class DogecoinBalanceController {
                             if (validationError != null) {
                                 throw new IllegalArgumentException(validationError);
                             }
-                            return tatumClient.getAddressBalance(address);
+                            return electrsClient.getAddressBalance(address);
                         })
                         .subscribeOn(Schedulers.boundedElastic())
                         .map(dto -> new AddressBalanceResult(address, dto, computeConfirmedBalance(dto), null))
@@ -70,7 +70,7 @@ public class DogecoinBalanceController {
     }
 
     /**
-     * "Actual" confirmed balance approximation when Tatum returns components.
+        * "Actual" confirmed balance approximation when the upstream returns components.
      * Uses:
      * - if dto.balance is present and > 0 => use it
      * - else compute (incoming - outgoing - outgoingPending)
@@ -139,7 +139,7 @@ public class DogecoinBalanceController {
     private String toErrorMessage(Throwable ex) {
         if (ex instanceof WebClientResponseException wcre) {
             String body = wcre.getResponseBodyAsString();
-            String msg = "Tatum error: " + wcre.getStatusCode();
+            String msg = "Electrs error: " + wcre.getStatusCode();
             if (body != null && !body.isBlank()) {
                 msg = msg + " body=" + shorten(body, 400);
             }

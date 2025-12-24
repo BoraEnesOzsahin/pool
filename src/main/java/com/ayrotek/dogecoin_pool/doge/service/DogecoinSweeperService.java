@@ -1,6 +1,6 @@
 package com.ayrotek.dogecoin_pool.doge.service;
 
-import com.ayrotek.dogecoin_pool.doge.client.TatumDogecoinClient;
+import com.ayrotek.dogecoin_pool.doge.client.ElectrsDogecoinClient;
 import com.ayrotek.dogecoin_pool.doge.config.TatumDogecoinProperties;
 import com.ayrotek.dogecoin_pool.doge.dto.DogeBalanceDto;
 import com.ayrotek.dogecoin_pool.doge.dto.DogeFromAddress;
@@ -29,18 +29,18 @@ public class DogecoinSweeperService {
     private static final BigDecimal MIN_CHANGE_DOGE = new BigDecimal("1.0");
     private static final BigDecimal FIXED_FEE_DOGE = new BigDecimal("1.0");
 
-    private final TatumDogecoinClient tatumClient;
+    private final ElectrsDogecoinClient electrsClient;
     private final TatumDogecoinProperties props;
     private final WebClient webClient;
 
     private final AtomicBoolean sweepInProgress = new AtomicBoolean(false);
 
     public DogecoinSweeperService(
-            TatumDogecoinClient tatumClient,
+            ElectrsDogecoinClient electrsClient,
             TatumDogecoinProperties props,
             WebClient.Builder webClientBuilder
     ) {
-        this.tatumClient = tatumClient;
+        this.electrsClient = electrsClient;
         this.props = props;
         this.webClient = webClientBuilder
                 .baseUrl(props.getBaseUrl())
@@ -58,13 +58,25 @@ public class DogecoinSweeperService {
         String hot = props.getHotAddress();
         String cold = props.getColdAddress();
 
+        if (hot != null) {
+            hot = hot.trim();
+        }
+        if (cold != null) {
+            cold = cold.trim();
+        }
+
+        String hotPrivateKey = props.getHotPrivateKey();
+        if (hotPrivateKey != null) {
+            hotPrivateKey = hotPrivateKey.trim();
+        }
+
         if (hot == null || hot.isBlank()) {
             return new DogeSweepResult(null, null, null, false, "HOT address is not configured");
         }
         if (cold == null || cold.isBlank()) {
             return new DogeSweepResult(null, null, null, false, "COLD address is not configured");
         }
-        if (props.getHotPrivateKey() == null || props.getHotPrivateKey().isBlank()) {
+        if (hotPrivateKey == null || hotPrivateKey.isBlank()) {
             return new DogeSweepResult(null, null, null, false, "HOT private key is not configured");
         }
 
@@ -87,10 +99,11 @@ public class DogecoinSweeperService {
 
         DogeBalanceDto balanceDto;
         try {
-            balanceDto = tatumClient.getAddressBalance(hot);
+            // Balance lookup via electrs-compatible API (no Tatum API key required)
+            balanceDto = electrsClient.getAddressBalance(hot);
         } catch (WebClientResponseException wcre) {
             String body = wcre.getResponseBodyAsString();
-            String msg = "Tatum balance error: " + wcre.getStatusCode();
+            String msg = "Electrs balance error: " + wcre.getStatusCode();
             if (body != null && !body.isBlank()) {
                 msg = msg + " body=" + shorten(body, 300);
             }
@@ -100,7 +113,7 @@ public class DogecoinSweeperService {
         }
 
         if (balanceDto == null) {
-            return new DogeSweepResult(null, null, null, false, "Tatum returned null balance payload");
+            return new DogeSweepResult(null, null, null, false, "Electrs returned null balance payload");
         }
         BigDecimal balance = parseBalance(balanceDto);
 
@@ -125,11 +138,16 @@ public class DogecoinSweeperService {
         }
 
         DogeTransactionAddressRequest body = new DogeTransactionAddressRequest(
-                List.of(new DogeFromAddress(hot, props.getHotPrivateKey())),
+            List.of(new DogeFromAddress(hot, hotPrivateKey)),
                 List.of(new DogeToAddress(cold, sendAmount)),
                 formatDoge(fee),
                 hot
         );
+
+        if (props.getApiKey() == null || props.getApiKey().isBlank()) {
+            return new DogeSweepResult(balance, sendAmount, null, false,
+                "Tatum apiKey is not configured; cannot broadcast sweep transaction");
+        }
 
         try {
             DogeTransactionResponse resp = webClient.post()
@@ -148,8 +166,13 @@ public class DogecoinSweeperService {
             return new DogeSweepResult(balance, sendAmount, resp.txId(), true, "submitted");
 
         } catch (WebClientResponseException wcre) {
-            log.error("[DOGE] Sweep failed status={} body={}", wcre.getStatusCode(), wcre.getResponseBodyAsString());
-            return new DogeSweepResult(balance, sendAmount, null, false, "Tatum error: " + wcre.getStatusCode());
+            String responseBody = wcre.getResponseBodyAsString();
+            log.error("[DOGE] Sweep failed status={} body={}", wcre.getStatusCode(), responseBody);
+            String msg = "Tatum error: " + wcre.getStatusCode();
+            if (responseBody != null && !responseBody.isBlank()) {
+                msg = msg + " body=" + shorten(responseBody, 500);
+            }
+            return new DogeSweepResult(balance, sendAmount, null, false, msg);
         } catch (Exception ex) {
             log.error("[DOGE] Sweep failed", ex);
             return new DogeSweepResult(balance, sendAmount, null, false, "Unexpected error");

@@ -28,6 +28,13 @@ public class TatumDogecoinClient {
                 .build();
     }
 
+    /**
+     * Deprecated: balance lookups should use {@link ElectrsDogecoinClient#getAddressBalance(String)}.
+     * <p>
+     * This method is kept only for backwards compatibility and should not be used for new code.
+     * Transaction broadcast still uses Tatum.
+     */
+    @Deprecated(forRemoval = false)
     public DogeBalanceDto getAddressBalance(String address) {
         ensureApiKey();
         String validationError = DogecoinAddressValidator.validate(address);
