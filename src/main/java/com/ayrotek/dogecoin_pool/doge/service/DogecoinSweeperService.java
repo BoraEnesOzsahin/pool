@@ -19,6 +19,7 @@ import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class DogecoinSweeperService {
@@ -31,6 +32,8 @@ public class DogecoinSweeperService {
     private final TatumDogecoinClient tatumClient;
     private final TatumDogecoinProperties props;
     private final WebClient webClient;
+
+    private final AtomicBoolean sweepInProgress = new AtomicBoolean(false);
 
     public DogecoinSweeperService(
             TatumDogecoinClient tatumClient,
@@ -47,6 +50,11 @@ public class DogecoinSweeperService {
     }
 
     public DogeSweepResult sweepOnce() {
+        if (!sweepInProgress.compareAndSet(false, true)) {
+            return new DogeSweepResult(null, null, null, false, "Sweep already in progress");
+        }
+
+        try {
         String hot = props.getHotAddress();
         String cold = props.getColdAddress();
 
@@ -145,6 +153,10 @@ public class DogecoinSweeperService {
         } catch (Exception ex) {
             log.error("[DOGE] Sweep failed", ex);
             return new DogeSweepResult(balance, sendAmount, null, false, "Unexpected error");
+        }
+
+        } finally {
+            sweepInProgress.set(false);
         }
     }
 
