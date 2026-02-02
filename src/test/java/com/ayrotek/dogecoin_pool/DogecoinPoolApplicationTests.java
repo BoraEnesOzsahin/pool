@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest(properties = {
-		"DOGE_SWEEP_ON_STARTUP=false",
-		"DOGE_SWEEP_PERIODIC_ENABLED=false"
+		"ETC_SWEEP_ON_STARTUP=false",
+		"ETC_SWEEP_PERIODIC_ENABLED=false"
 })
 class DogecoinPoolApplicationTests {
 

@@ -1,45 +1,52 @@
-package com.ayrotek.dogecoin_pool.doge.config;
+package com.ayrotek.dogecoin_pool.etc.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConfigurationProperties(prefix = "tatum.doge")
-public class TatumDogecoinProperties {
+@ConfigurationProperties(prefix = "tatum.etc")
+public class TatumEtcProperties {
 
     /**
-     * Base URL for Tatum REST API.
-     * Typically "https://api.tatum.io".
+     * Base URL for Tatum ETC Testnet API.
+     * Default: "https://ethereum-classic-testnet.gateway.tatum.io"
      */
-    private String baseUrl = "https://api.tatum.io";
+    private String baseUrl = "https://ethereum-classic-testnet.gateway.tatum.io";
 
     /**
-     * Tatum API key bound to Dogecoin TESTNET.
+     * Tatum API key for Ethereum Classic TESTNET.
      */
     private String apiKey;
 
     /**
-     * Testnet HOT wallet address + private key (swept FROM).
-     * TESTNET ONLY.
+     * Testnet HOT wallet address (swept FROM).
+     * TESTNET ONLY - should be a valid ETC testnet address (0x...).
      */
     private String hotAddress;
+
+    /**
+     * Testnet HOT wallet private key.
+     * TESTNET ONLY.
+     */
     private String hotPrivateKey;
 
     /**
      * Testnet COLD wallet address (swept TO).
+     * Should be a valid ETC testnet address (0x...).
      */
     private String coldAddress;
 
     /**
-     * Minimal sweep threshold in DOGE.
-     * If balance < minSweepDoge, skip.
+     * Minimal sweep threshold in ETC.
+     * If balance < minSweepEtc, skip sweeping.
      */
-    private double minSweepDoge = 10.0;
+    private double minSweepEtc = 1.0;
 
     /**
-     * Reserve in DOGE to keep on HOT address after sweeping.
+     * Reserve in ETC to keep on HOT address after sweeping.
+     * This amount is kept for gas fees.
      */
-    private double reserveDoge = 1.0;
+    private double reserveEtc = 0.5;
 
     public String getBaseUrl() {
         return baseUrl;
@@ -81,19 +88,19 @@ public class TatumDogecoinProperties {
         this.coldAddress = coldAddress;
     }
 
-    public double getMinSweepDoge() {
-        return minSweepDoge;
+    public double getMinSweepEtc() {
+        return minSweepEtc;
     }
 
-    public void setMinSweepDoge(double minSweepDoge) {
-        this.minSweepDoge = minSweepDoge;
+    public void setMinSweepEtc(double minSweepEtc) {
+        this.minSweepEtc = minSweepEtc;
     }
 
-    public double getReserveDoge() {
-        return reserveDoge;
+    public double getReserveEtc() {
+        return reserveEtc;
     }
 
-    public void setReserveDoge(double reserveDoge) {
-        this.reserveDoge = reserveDoge;
+    public void setReserveEtc(double reserveEtc) {
+        this.reserveEtc = reserveEtc;
     }
 }
