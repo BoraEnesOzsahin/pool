@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  dogecoin-pool:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dogecoin-pool
+    ports:
+      - "8080:8080"
+    environment:
+      # Electrs API endpoint
+      ELECTRS_DOGE_BASE_URL: https://doge-electrs-testnet-demo.qed.me
+      
+      # Tatum configuration (TESTNET ONLY)
+      TATUM_DOGE_BASE_URL: https://api.tatum.io
+      TATUM_DOGE_API_KEY: ${TATUM_DOGE_TESTNET_API_KEY:-}
+      TATUM_DOGE_HOT_ADDRESS: ${TATUM_DOGE_HOT_ADDRESS:-}
+      TATUM_DOGE_HOT_PRIVATE_KEY: ${TATUM_DOGE_HOT_PRIVATE_KEY:-}
+      TATUM_DOGE_COLD_ADDRESS: ${TATUM_DOGE_COLD_ADDRESS:-}
+      TATUM_DOGE_MIN_SWEEP: ${TATUM_DOGE_MIN_SWEEP:-10.0}
+      TATUM_DOGE_RESERVE: ${TATUM_DOGE_RESERVE:-470.0}
+      
+      # Sweep settings
+      DOGE_SWEEP_ON_STARTUP: "false"
+      DOGE_SWEEP_PERIODIC_ENABLED: "false"
+      DOGE_SWEEP_FIXED_DELAY_MS: "15000"
+      DOGE_SWEEP_INITIAL_DELAY_MS: "15000"
+    
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/doge/balances"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
