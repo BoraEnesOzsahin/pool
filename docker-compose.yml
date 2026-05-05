@@ -1,0 +1,33 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    environment:
+      SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:postgresql://db:5432/pool_ser}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-postgres}
+      TATUM_ETC_API_KEY: ${TATUM_ETC_TESTNET_API_KEY:-}
+      TATUM_ETC_HOT_ADDRESS: ${TATUM_ETC_HOT_ADDRESS:-}
+      TATUM_ETC_HOT_PRIVATE_KEY: ${TATUM_ETC_HOT_PRIVATE_KEY:-}
+      TATUM_ETC_COLD_ADDRESS: ${TATUM_ETC_COLD_ADDRESS:-}
+      TATUM_ETC_MIN_SWEEP_ETC: ${TATUM_ETC_MIN_SWEEP:-1.0}
+      TATUM_ETC_RESERVE_ETC: ${TATUM_ETC_RESERVE:-0.5}
+      TATUM_ETC_BASE_URL: ${TATUM_ETC_BASE_URL:-https://ethereum-classic-testnet.gateway.tatum.io}
+      ETC_SWEEP_ON_STARTUP: ${ETC_SWEEP_ON_STARTUP:-false}
+      ETC_SWEEP_PERIODIC_ENABLED: ${ETC_SWEEP_PERIODIC_ENABLED:-true}
+      ETC_SWEEP_FIXED_DELAY_MS: ${ETC_SWEEP_FIXED_DELAY_MS:-15000}
+      ETC_SWEEP_INITIAL_DELAY_MS: ${ETC_SWEEP_INITIAL_DELAY_MS:-15000}
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pool_ser}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
