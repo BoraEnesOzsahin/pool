@@ -15,7 +15,7 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN useradd --system --uid 1001 appuser
 
-COPY --from=builder /workspace/target/*.jar /app/app.jar
+COPY --from=builder /workspace/target/pool-*.jar /app/app.jar
 
 USER appuser
 EXPOSE 8080
