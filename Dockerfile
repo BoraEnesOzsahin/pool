@@ -7,13 +7,14 @@ COPY mvnw pom.xml ./
 RUN chmod +x mvnw && ./mvnw -q -DskipTests dependency:go-offline
 
 COPY src src
-RUN ./mvnw -DskipTests package
+RUN ./mvnw -DskipTests package \
+    && mv target/*.jar /workspace/app.jar
 
 FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
-COPY --from=build /workspace/target/*.jar app.jar
+COPY --from=build /workspace/app.jar app.jar
 
 EXPOSE 8080
 
